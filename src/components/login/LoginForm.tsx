@@ -8,7 +8,7 @@ import AuthInput from "../auth/AuthInput";
 import { useRouter } from "next/navigation";
 import { getSignInDestination } from "@/lib/auth/getSignInDestination";
 import { createClient } from "@/lib/supabase/client";
-import { getWhatsAppSupportHref } from "@/lib/support/whatsAppSupport";
+import Link from "next/link";
 
 type LoginFormProps = {
   storeSlug?: string;
@@ -24,9 +24,6 @@ export default function LoginForm({
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(initialNotice);
   const router = useRouter();
-  const supportHref = getWhatsAppSupportHref(
-    process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_NUMBER,
-  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,28 +108,7 @@ export default function LoginForm({
         />
 
         <div className="mt-2 text-right">
-          {supportHref ? (
-            <a
-              href={supportHref}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-semibold text-primary transition hover:underline"
-            >
-              Forgot Password? Contact support
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={() =>
-                setNotice(
-                  "Support is temporarily unavailable. Please try again later.",
-                )
-              }
-              className="text-sm font-semibold text-primary transition hover:underline"
-            >
-              Forgot Password?
-            </button>
-          )}
+          <Link href="/forgot-password" className="text-sm font-semibold text-primary transition hover:underline">Forgot Password?</Link>
         </div>
       </div>
 

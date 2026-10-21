@@ -13,6 +13,8 @@ import AuthInput from "../auth/AuthInput";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSignUpDestination } from "@/lib/auth/getSignUpDestination";
+import { getEmailAuthRedirect } from "@/lib/auth/emailAuth";
+import { getSafeAuthCallbackStoreSlug } from "@/lib/auth/authCallback";
 
 type RegisterFormProps = {
   storeSlug?: string;
@@ -51,8 +53,9 @@ export default function RegisterForm({
         data: {
           full_name: fullName,
           phone,
+          signup_store: getSafeAuthCallbackStoreSlug(storeSlug ?? null),
         },
-        emailRedirectTo: window.location.origin + destination,
+        emailRedirectTo: getEmailAuthRedirect(window.location.origin),
       },
     });
 
@@ -65,7 +68,7 @@ export default function RegisterForm({
 
     if (!data.session) {
       setMessage(
-        "Check your email to confirm your account, then continue setting up your store.",
+        "Check your email to confirm your account. Open the link in this browser to finish signing in.",
       );
       return;
     }

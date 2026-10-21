@@ -1,3 +1,5 @@
+import { AUTH_LINK_FAILURE } from "./emailAuth";
+
 export function getSafeAuthCallbackStoreSlug(
     value: string | null,
 ): string | undefined {
@@ -28,6 +30,8 @@ export function getSafeAuthCallbackNext(value: string | null): string {
 }
 
 export function getSafeLoginNotice(value: string | null): string {
+    if (value === "auth-link-invalid") return AUTH_LINK_FAILURE;
+    if (value === "password-reset") return "Password changed. Sign in with your new password.";
     return value === "google-sign-in-failed"
         ? "Google sign-in could not be completed. Please try again."
         : "";
