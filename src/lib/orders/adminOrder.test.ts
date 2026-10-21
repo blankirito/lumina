@@ -18,7 +18,6 @@ payment_method_label: "Test Payment",
       order_items: [
   {
     id: "item-1",
-    product_name: "Glow Serum",
     products: {
       product_images: [
         {

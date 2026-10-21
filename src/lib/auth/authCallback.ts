@@ -17,7 +17,9 @@ export function getSafeAuthCallbackNext(value: string | null): string {
         !value ||
         !value.startsWith("/") ||
         value.startsWith("//") ||
-        value.includes("\\")
+        value.includes("\\") ||
+        // URL parsing strips these characters and can turn /<tab>/host into //host.
+        ["\t", "\n", "\r"].some((character) => value.includes(character))
     ) {
         return "/";
     }

@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { getAdminProductMetrics } from "./adminProductMetrics";
 
+const productDetails = {
+  collection: null,
+  dimensions: null,
+  weight: null,
+  features: [],
+  createdAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-01T00:00:00.000Z",
+};
+
 describe("admin product metrics", () => {
   it("counts in-stock and low-stock products from real inventory values", () => {
     const metrics = getAdminProductMetrics([
       {
         id: "product-1",
+        ...productDetails,
         sku: "SER-001",
         name: "Glow Serum",
         description: "Hydrating serum",
@@ -20,6 +30,7 @@ describe("admin product metrics", () => {
       },
       {
         id: "product-2",
+        ...productDetails,
         sku: "CRE-001",
         name: "Face Cream",
         description: "Daily face cream",
@@ -34,6 +45,7 @@ describe("admin product metrics", () => {
       },
       {
         id: "product-3",
+        ...productDetails,
         sku: "LIP-001",
         name: "Velvet Lipstick",
         description: "Matte lipstick",
@@ -48,6 +60,7 @@ describe("admin product metrics", () => {
       },
             {
         id: "product-4",
+        ...productDetails,
         sku: "OLD-001",
         name: "Old Product",
         description: "Archived product",
