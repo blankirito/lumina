@@ -3,10 +3,10 @@
 import {
     createContext,
     useContext,
-    useEffect,
+    useCallback,
     useMemo,
-    useState,
 } from "react";
+import { useLocalStorageState } from "@/components/state/useLocalStorageState";
 import {
     addStorefrontCartItemWithinStock,
     type StorefrontCartLine,
@@ -38,40 +38,25 @@ const StorefrontCartContext =
 
 const STORAGE_KEY = "lumina-storefront-cart";
 
+const EMPTY_ITEMS: StorefrontCartLine[] = [];
+
 export function StorefrontCartProvider({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const [items, setItems] = useState<StorefrontCartLine[]>([]);
-    const [isReady, setIsReady] = useState(false);
+    const { value: items, setValue: setItems, isReady } = useLocalStorageState(
+        STORAGE_KEY,
+        EMPTY_ITEMS,
+        true,
+    );
 
-    useEffect(() => {
-        try {
-            const savedCart = window.localStorage.getItem(STORAGE_KEY);
-
-            if (savedCart) {
-                setItems(JSON.parse(savedCart) as StorefrontCartLine[]);
-            }
-        } catch {
-            window.localStorage.removeItem(STORAGE_KEY);
-        } finally {
-            setIsReady(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (isReady) {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-        }
-    }, [isReady, items]);
-
-    function addItem(
+    const addItem = useCallback((
         storeSlug: string,
         productId: string,
         quantity: number,
         availableStock: number,
-    ) {
+    ) => {
         setItems((currentItems) =>
             addStorefrontCartItemWithinStock(
                 currentItems,
@@ -83,14 +68,14 @@ export function StorefrontCartProvider({
                 availableStock,
             ),
         );
-    }
+    }, [setItems]);
 
-    function updateQuantity(
+    const updateQuantity = useCallback((
         storeSlug: string,
         productId: string,
         quantity: number,
         availableStock?: number,
-    ) {
+    ) => {
         const safeQuantity =
             availableStock === undefined
                 ? quantity
@@ -104,18 +89,18 @@ export function StorefrontCartProvider({
                 safeQuantity,
             ),
         );
-    }
+    }, [setItems]);
 
-    function getItemsForStore(storeSlug: string) {
+    const getItemsForStore = useCallback((storeSlug: string) => {
         return items.filter((item) => item.storeSlug === storeSlug);
-    }
+    }, [items]);
 
-    function getItemCountForStore(storeSlug: string) {
+    const getItemCountForStore = useCallback((storeSlug: string) => {
         return getItemsForStore(storeSlug).reduce(
             (total, item) => total + item.quantity,
             0,
         );
-    }
+    }, [getItemsForStore]);
 
     const value = useMemo(
         () => ({
@@ -126,7 +111,10 @@ export function StorefrontCartProvider({
             getItemsForStore,
             getItemCountForStore,
         }),
-        [items, isReady],
+        [
+            items, isReady, addItem, updateQuantity,
+            getItemsForStore, getItemCountForStore,
+        ],
     );
 
     return (

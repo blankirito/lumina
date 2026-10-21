@@ -1,5 +1,7 @@
 # Lumina repository security audit — 21 October 2026
 
+**Second-round update:** all 11 lint errors are now fixed (0 errors / 33 warnings); 259 application tests, 25 database boundary tests and 18 migration recovery tests pass. TypeScript and the clean production build pass. See [the pre-merge review](premerge-review-2026-10-21.md) for current results, dependency disposition, IIS rotation advice and the remaining NO-GO gates. The first-round results below are retained as historical evidence and are superseded where that review says so.
+
 Scope: source and cumulative migrations from main `c708662b47ab4e91b3e3335e25c915a2ba258ec9`, npm lockfile, and all 82 available Git commits. Local tests use synthetic data only. This is a repository audit, not a statement that production is secure or that any exploit occurred.
 
 ## Findings and changes

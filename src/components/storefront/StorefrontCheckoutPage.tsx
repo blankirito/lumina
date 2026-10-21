@@ -54,8 +54,6 @@ export default function StorefrontCheckoutPage({
 }: StorefrontCheckoutPageProps) {
   const { items, isReady, updateQuantity } = useStorefrontCart();
 
-  const [products, setProducts] = useState<StorefrontProduct[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<CheckoutSuccess | null>(null);
@@ -114,22 +112,28 @@ export default function StorefrontCheckoutPage({
     [items, storeSlug],
   );
 
+  const request = useMemo(
+    () => ({ storeId, isReady, cartItems }),
+    [storeId, isReady, cartItems],
+  );
+  const [loadedProducts, setLoadedProducts] = useState<{
+    request: typeof request;
+    products: StorefrontProduct[];
+  } | null>(null);
+  const hasProducts = cartItems.length > 0;
+  const products = useMemo(
+    () => hasProducts && loadedProducts?.request === request
+      ? loadedProducts.products
+      : [],
+    [hasProducts, loadedProducts, request],
+  );
+  const isLoadingProducts = !isReady || (hasProducts && loadedProducts?.request !== request);
+
   useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      setProducts([]);
-      setIsLoadingProducts(false);
-      return;
-    }
-
+    if (!request.isReady || request.cartItems.length === 0) return;
     let isCurrent = true;
 
     async function loadProducts() {
-      setIsLoadingProducts(true);
-
       const { data } = await createClient()
         .from("products")
         .select(`
@@ -151,29 +155,25 @@ export default function StorefrontCheckoutPage({
             is_primary
           )
         `)
-        .eq("store_id", storeId)
+        .eq("store_id", request.storeId)
         .eq("is_active", true)
-        .in(
-          "id",
-          cartItems.map((item) => item.productId),
-        );
+        .in("id", request.cartItems.map((item) => item.productId));
 
       if (isCurrent) {
-        setProducts(
-          (data ?? []).map((product) =>
+        setLoadedProducts({
+          request,
+          products: (data ?? []).map((product) =>
             toStorefrontProduct(product as DatabaseStorefrontProduct),
           ),
-        );
-        setIsLoadingProducts(false);
+        });
       }
     }
 
     void loadProducts();
-
     return () => {
       isCurrent = false;
-    };
-  }, [cartItems, isReady, storeId]);
+  };
+  }, [request]);
 
   const viewItems = toStorefrontCartView(cartItems, products);
 

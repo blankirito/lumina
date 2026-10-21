@@ -19,4 +19,12 @@ node supabase/tests/order-write-boundaries.mjs ../sql-audit-runtime/node_modules
 
 Expected: six security assertions fail against the old schema. This is a deliberately failing baseline, not a command to run against a hosted database.
 
-These tests cannot prove the deployed Supabase schema matches the repository, exercise hosted Storage APIs, or replace a separate staging migration rehearsal.
+For synthetic migration failure, rollback and forward-recovery scenarios:
+
+```sh
+node supabase/tests/migration-rehearsal.mjs ../sql-audit-runtime/node_modules/@electric-sql/pglite
+```
+
+Expected: 18 passing cases. See [the migration rehearsal and recovery review](../../docs/migration-rehearsal-2026-10-21.md) for the tested scenarios, safe transition order and hosted verification requirements.
+
+These tests cannot prove the deployed Supabase schema matches the repository, exercise hosted Storage APIs, or replace a separate hosted staging migration rehearsal.

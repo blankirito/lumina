@@ -130,7 +130,7 @@ export default function CustomerForm({
             </p>
 
             <p className="mt-1 text-xs text-on-surface-variant">
-              Customer's primary delivery address.
+              Customer&apos;s primary delivery address.
             </p>
 
             <div className="mt-4 space-y-4">

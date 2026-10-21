@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useLocalStorageState } from "@/components/state/useLocalStorageState";
 import SearchBar from "@/components/search/SearchBar";
 import RecentSearch from "@/components/search/RecentSearch";
 import PopularCategory from "@/components/search/PopularCategory";
@@ -15,31 +16,17 @@ type StorefrontSearchClientProps = {
   products: StorefrontProduct[];
 };
 
+const EMPTY_SEARCHES: string[] = [];
+
 export default function StorefrontSearchClient({
   storeName,
   storeSlug,
   products,
 }: StorefrontSearchClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-
   const storageKey = `lumina-recent-searches:${storeSlug}`;
-
-  useEffect(() => {
-    const savedSearches = window.localStorage.getItem(storageKey);
-
-    if (!savedSearches) {
-      setRecentSearches([]);
-      return;
-    }
-
-    try {
-      setRecentSearches(JSON.parse(savedSearches));
-    } catch {
-      window.localStorage.removeItem(storageKey);
-      setRecentSearches([]);
-    }
-  }, [storageKey]);
+  const { value: recentSearches, setValue: setRecentSearches, clear: clearSearches } =
+    useLocalStorageState(storageKey, EMPTY_SEARCHES);
 
   function saveSearch(value: string) {
     const trimmedValue = value.trim();
@@ -55,8 +42,6 @@ export default function StorefrontSearchClient({
           (item) => item.toLowerCase() !== trimmedValue.toLowerCase(),
         ),
       ].slice(0, 5);
-
-      window.localStorage.setItem(storageKey, JSON.stringify(nextSearches));
 
       return nextSearches;
     });
@@ -89,10 +74,7 @@ export default function StorefrontSearchClient({
           <RecentSearch
             searches={recentSearches}
             onSelect={setSearchQuery}
-            onClear={() => {
-              setRecentSearches([]);
-              window.localStorage.removeItem(storageKey);
-            }}
+            onClear={clearSearches}
           />
 
           <PopularCategory
