@@ -70,7 +70,7 @@ No card details are collected by Lumina in this flow.
 
 ```bash
 git clone <your-repository-url>
-cd beauty-store
+cd lumina
 npm install
 ```
 
