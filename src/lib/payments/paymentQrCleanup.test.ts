@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   deleted: [] as string[],
   updates: [] as Record<string, unknown>[],
   removeError: null as null | { message: string },
+  persistenceError: null as null | { message: string },
   excludeNull: [] as string[],
 }));
 
@@ -31,6 +32,7 @@ vi.mock("@/lib/supabase/service", () => ({
         delete: () => { deleting = true; return query; },
         update: (data: Record<string, unknown>) => { state.updates.push(data); return query; },
         eq: async (_column: string, id: string) => {
+          if (state.persistenceError) return { error: state.persistenceError };
           if (deleting) state.deleted.push(id);
           return { error: null };
         },
@@ -59,6 +61,7 @@ describe("payment QR cleanup provenance", () => {
     state.updates = [];
     state.excludeNull = [];
     state.removeError = null;
+    state.persistenceError = null;
   });
 
   it("leaves legacy jobs without authorization provenance untouched", async () => {
@@ -102,5 +105,34 @@ describe("payment QR cleanup provenance", () => {
   it("excludes legacy jobs before applying the batch limit so retries are not starved", async () => {
     await runCleanup();
     expect(state.excludeNull).toEqual(["store_id", "payment_method_id"]);
+  });
+
+  it("reports queue acknowledgement failure and can finish on retry", async () => {
+    state.persistenceError = { message: "Private database failure" };
+    const failed = await runCleanup();
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toMatchObject({ removed: 0, failed: 1 });
+    expect(state.deleted).toEqual([]);
+    state.persistenceError = null;
+    const recovered = await runCleanup();
+    expect(recovered.status).toBe(200);
+    expect(await recovered.json()).toMatchObject({ removed: 1, failed: 0 });
+    expect(state.deleted).toEqual(["job-1"]);
+  });
+
+  it("reports storage failure and failed retry bookkeeping without leaking details", async () => {
+    state.removeError = { message: "Private storage failure" };
+    state.persistenceError = { message: "Private database failure" };
+    const response = await runCleanup();
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("Private");
+    expect(state.deleted).toEqual([]);
+  });
+
+  it("fails the run when storage removal fails even if bookkeeping succeeds", async () => {
+    state.removeError = { message: "Temporary storage failure" };
+    const response = await runCleanup();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ removed: 0, failed: 1 });
   });
 });

@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   let removedCount = 0;
   let failedCount = 0;
   let skippedCount = 0;
+  let persistenceFailedCount = 0;
 
   for (const job of jobs ?? []) {
     if (!isPaymentQrImagePathOwnedBy(job.storage_path, {
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     if (removeError) {
       failedCount += 1;
 
-      await supabase
+      const { error: updateError } = await supabase
         .from("payment_qr_cleanup_jobs")
         .update({
           attempts: job.attempts + 1,
@@ -60,15 +61,24 @@ export async function GET(request: Request) {
         })
         .eq("id", job.id);
 
+      if (updateError) persistenceFailedCount += 1;
+
       continue;
     }
 
-    removedCount += 1;
-
-    await supabase
+    const { error: deleteError } = await supabase
       .from("payment_qr_cleanup_jobs")
       .delete()
       .eq("id", job.id);
+
+    if (deleteError) {
+      // Storage deletion is idempotent. Retain the queue row for a later run
+      // rather than reporting an unfinished acknowledgement as success.
+      failedCount += 1;
+      persistenceFailedCount += 1;
+    } else {
+      removedCount += 1;
+    }
   }
 
   return Response.json({
@@ -76,5 +86,6 @@ export async function GET(request: Request) {
     removed: removedCount,
     failed: failedCount,
     skipped: skippedCount,
-  });
+    persistenceFailed: persistenceFailedCount,
+  }, { status: failedCount > 0 ? 500 : 200 });
 }
