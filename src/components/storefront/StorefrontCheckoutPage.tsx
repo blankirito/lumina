@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, CheckCircle2, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -20,6 +20,13 @@ import type { StorefrontSavedAddress } from "@/lib/storefront/storefrontAddresse
 import { submitGuestCheckout } from "@/app/store/[slug]/checkout/actions";
 import { getStorefrontPaymentQrView } from "@/lib/storefront/storefrontPaymentQr";
 import { getGuestTrackingLink } from "@/lib/storefront/guestTrackingLink";
+import { beginCheckoutAttempt, clearCheckoutAttempt, readCheckoutAttempt, type CheckoutAttempt } from "@/lib/storefront/checkoutAttempt";
+
+const subscribeAttempts = (listener: () => void) => {
+  window.addEventListener("lumina-checkout-attempt", listener);
+  return () => window.removeEventListener("lumina-checkout-attempt", listener);
+};
+const emptyAttempt = () => null;
 
 type StorefrontCheckoutPageProps = {
   storeId: string;
@@ -30,6 +37,7 @@ type StorefrontCheckoutPageProps = {
   preferredPaymentMethodId: string | null;
   savedAddresses: StorefrontSavedAddress[];
   defaultAddressId: string | null;
+  recoveryOnly?: boolean;
 };
 
 type CheckoutSuccess = {
@@ -38,6 +46,7 @@ type CheckoutSuccess = {
   tracking_token: string;
   payment_method_label: string;
   payment_instructions: string;
+  replayed: boolean;
   paymentQrImageUrl: string | null;
   paymentQrGuidance: string | null;
 };
@@ -51,6 +60,7 @@ export default function StorefrontCheckoutPage({
   preferredPaymentMethodId,
   savedAddresses,
   defaultAddressId,
+  recoveryOnly = false,
 }: StorefrontCheckoutPageProps) {
   const { items, isReady, updateQuantity } = useStorefrontCart();
 
@@ -58,6 +68,11 @@ export default function StorefrontCheckoutPage({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<CheckoutSuccess | null>(null);
   const [trackingCopyMessage, setTrackingCopyMessage] = useState("");
+  const submitting = useRef(false);
+  const savedAttempt = useSyncExternalStore(subscribeAttempts, () => {
+    try { return window.sessionStorage.getItem(`lumina-checkout-attempt:${storeSlug}`); }
+    catch { return "unavailable"; }
+  }, emptyAttempt);
   const initialPaymentMethodId =
     preferredPaymentMethodId &&
       paymentMethods.some(
@@ -130,7 +145,7 @@ export default function StorefrontCheckoutPage({
   const isLoadingProducts = !isReady || (hasProducts && loadedProducts?.request !== request);
 
   useEffect(() => {
-    if (!request.isReady || request.cartItems.length === 0) return;
+    if (!request.storeId || !request.isReady || request.cartItems.length === 0) return;
     let isCurrent = true;
 
     async function loadProducts() {
@@ -212,10 +227,9 @@ export default function StorefrontCheckoutPage({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
+    if (submitting.current) return;
     try {
       setErrorMessage(null);
-      setIsSubmitting(true);
 
       const request = prepareGuestCheckoutRequest({
         storeSlug,
@@ -227,31 +241,55 @@ export default function StorefrontCheckoutPage({
         })),
       });
 
-      const result = await submitGuestCheckout(request);
-
-      if (result.status === "error") {
-        throw new Error(result.message);
-      }
-
-      const order = result.order;
-
-      cartItems.forEach((item) => {
-        updateQuantity(storeSlug, item.productId, 0);
-      });
-
-      setSuccess({
-        ...order,
-        paymentQrImageUrl: selectedPaymentQr?.imageUrl ?? null,
-        paymentQrGuidance: selectedPaymentQr?.guidance ?? null,
-      });
+      const attempt = beginCheckoutAttempt(window.sessionStorage, storeSlug, request);
+      window.dispatchEvent(new Event("lumina-checkout-attempt"));
+      await sendAttempt(attempt);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "Could not place your order.",
       );
+    }
+  }
+
+  async function sendAttempt(attempt: CheckoutAttempt) {
+    if (submitting.current) return;
+    submitting.current = true;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const result = await submitGuestCheckout(attempt.request, attempt.key);
+      if (result.status === "error") {
+        if (!result.retryable) {
+          clearCheckoutAttempt(window.sessionStorage, storeSlug, attempt.key);
+          window.dispatchEvent(new Event("lumina-checkout-attempt"));
+        }
+        setErrorMessage(result.message);
+        return;
+      }
+      // Record success before best-effort cart/storage cleanup. Neither a
+      // storage exception nor a lost response may start a new checkout key.
+      setSuccess({ ...result.order, paymentQrImageUrl: selectedPaymentQr?.imageUrl ?? null, paymentQrGuidance: selectedPaymentQr?.guidance ?? null });
+      try {
+        attempt.request.items.forEach(item => updateQuantity(storeSlug, item.productId, 0));
+        // Keep the recovery key until the customer explicitly leaves to start
+        // another order. A refresh after successful checkout stays recoverable.
+      } catch { /* Retained attempt remains safe to recover on a refresh. */ }
+    } catch {
+      setErrorMessage("Your checkout result could not be confirmed. Use Recover checkout to safely check the same order.");
     } finally {
+      submitting.current = false;
       setIsSubmitting(false);
+    }
+  }
+
+  async function recoverCheckout() {
+    try {
+      const attempt = readCheckoutAttempt(window.sessionStorage, storeSlug);
+      if (attempt) await sendAttempt(attempt);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Cannot recover the saved checkout. Contact the store before ordering again.");
     }
   }
 
@@ -274,7 +312,7 @@ export default function StorefrontCheckoutPage({
     }
   }
 
-  if (!isReady || isLoadingProducts) {
+  if (!recoveryOnly && !savedAttempt && (!isReady || isLoadingProducts)) {
     return (
       <main className="min-h-screen bg-background px-5 py-6">
         <div className="h-8 w-44 animate-pulse rounded bg-surface-low" />
@@ -301,7 +339,7 @@ export default function StorefrontCheckoutPage({
           </p>
 
           <h1 className="mt-2 font-display text-3xl text-primary">
-            Order placed
+            {success.replayed ? "Checkout recovered" : "Order placed"}
           </h1>
 
           <p className="mt-3 text-on-surface-variant">
@@ -312,7 +350,7 @@ export default function StorefrontCheckoutPage({
             {success.order_number}
           </p>
 
-          <div className="mt-6 rounded-xl bg-surface-low p-5 text-left">
+          {success.replayed ? <p className="mt-6 text-on-surface-variant">This is your original order. Check its current status through Track this order before making any payment.</p> : <div className="mt-6 rounded-xl bg-surface-low p-5 text-left">
             <p className="font-semibold text-primary">
               {success.payment_method_label}
             </p>
@@ -321,9 +359,9 @@ export default function StorefrontCheckoutPage({
               {success.payment_instructions ||
                 "The store will contact you with payment instructions."}
             </p>
-          </div>
+          </div>}
 
-          {success.paymentQrImageUrl && (
+          {!success.replayed && success.paymentQrImageUrl && (
             <div className="mt-4 rounded-xl border border-outline/40 bg-surface-low p-4 text-left">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -364,9 +402,19 @@ export default function StorefrontCheckoutPage({
 
               <Link
                 href={`/store/${storeSlug}`}
+                onClick={(event) => {
+                  try {
+                    const attempt = readCheckoutAttempt(window.sessionStorage, storeSlug);
+                    if (attempt) clearCheckoutAttempt(window.sessionStorage, storeSlug, attempt.key);
+                    window.dispatchEvent(new Event("lumina-checkout-attempt"));
+                  } catch {
+                    event.preventDefault();
+                    setTrackingCopyMessage("Could not clear the saved checkout. Keep your tracking link and contact the store before ordering again.");
+                  }
+                }}
                 className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white"
               >
-                Back to store
+                Back to store — start a new order
               </Link>
             </div>
 
@@ -382,6 +430,19 @@ export default function StorefrontCheckoutPage({
         </section>
       </main>
     );
+  }
+
+  if (savedAttempt) {
+    return <main className="min-h-screen bg-background px-5 py-12 text-center">
+      <h1 className="font-display text-3xl text-primary">Recover checkout</h1>
+      <p className="mx-auto mt-4 max-w-lg">A checkout is awaiting confirmation in this browser tab. Recover it before placing another order or changing its details. Recovery uses the original request and does not reserve stock twice.</p>
+      <button type="button" disabled={isSubmitting} onClick={() => void recoverCheckout()} className="mt-6 rounded-xl bg-primary px-6 py-3 text-white disabled:opacity-50">{isSubmitting ? "Checking order…" : "Recover checkout"}</button>
+      {errorMessage ? <p role="alert" className="mt-4">{errorMessage}</p> : null}
+    </main>;
+  }
+
+  if (recoveryOnly) {
+    return <main className="min-h-screen bg-background px-5 py-12 text-center"><h1 className="font-display text-3xl text-primary">Store unavailable</h1><p className="mt-4">If a checkout is saved in this browser tab, its recovery option will appear here. Otherwise contact the store about an existing order.</p></main>;
   }
 
   if (viewItems.length === 0) {

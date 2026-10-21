@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import StorefrontCheckoutPage from "@/components/storefront/StorefrontCheckoutPage";
 import {
   getPublicStorefront,
@@ -36,7 +35,11 @@ export default async function StorefrontCheckoutRoute({
   const storefront = await getPublicStorefront(slug);
 
   if (!storefront) {
-    notFound();
+    // Recovery must remain available after a store is suspended. This shell
+    // reveals no private store data and cannot start a new checkout.
+    return <StorefrontCheckoutPage storeId="" storeName="Store" storeSlug={slug.toLowerCase()}
+      customerEmail="" paymentMethods={[]} preferredPaymentMethodId={null}
+      savedAddresses={[]} defaultAddressId={null} recoveryOnly />;
   }
 
   const supabase = await createClient();
@@ -117,3 +120,4 @@ export default async function StorefrontCheckoutRoute({
     />
   );
 }
+import React from "react";
