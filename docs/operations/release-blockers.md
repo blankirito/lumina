@@ -8,7 +8,7 @@ Source: PR #1 starting at ab5ca8b, Production Release Runbook, 2026-10-22 audit 
 - [x] Implement exact staging target guard, authenticated encrypted recovery bundles, component hashes, complete-bundle validation and retention planning. Tests: wrong target/key, tampering, incomplete bundles, expired/referenced restore points.
 - [x] Validate fresh identified synthetic staging DB/Auth records and real Storage bytes, including a restore. Local SQL doubles do not certify hosted services. Actual hosted login failure/recovery and image deletion/recreation/hash check passed.
 - [x] Prepare a production recipe covering full PostgreSQL/schema/roles, Auth, migration history, object versions, configuration, key custody, retention and verification. Keep production execution locked. See [implementation and acceptance recipe](production-backup.md).
-- [ ] Run affected regressions, type check, lint/build and one focused final review. Publish to PR #1 with branch-specific automatic deployment suppression.
+- [x] Run affected regressions, type check, lint/build and one focused final review. Publish to PR #1 with branch-specific automatic deployment suppression.
 
 ## B1–B8 closure matrix
 
