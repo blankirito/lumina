@@ -32,8 +32,6 @@ export default function StorefrontCartPage({
     storeSlug,
 }: StorefrontCartPageProps) {
     const { items, isReady, updateQuantity } = useStorefrontCart();
-    const [products, setProducts] = useState<StorefrontProduct[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
 
     const cartItems = useMemo(
         () => items.filter((item) => item.storeSlug === storeSlug),
@@ -48,20 +46,28 @@ export default function StorefrontCartPage({
     [cartItems],
     );
 
+    const request = useMemo(
+        () => ({ storeId, isReady, cartProductIdsKey }),
+        [storeId, isReady, cartProductIdsKey],
+    );
+    const [loadedProducts, setLoadedProducts] = useState<{
+        request: typeof request;
+        products: StorefrontProduct[];
+    } | null>(null);
+    const hasProducts = Boolean(cartProductIdsKey);
+    const products = useMemo(
+        () => hasProducts && loadedProducts?.request === request
+            ? loadedProducts.products
+            : [],
+        [hasProducts, loadedProducts, request],
+    );
+    const isLoading = !isReady || (hasProducts && loadedProducts?.request !== request);
+
     useEffect(() => {
-        if (!isReady) return;
-
-        if (cartItems.length === 0) {
-            setProducts([]);
-            setIsLoading(false);
-            return;
-        }
-
+        if (!request.isReady || !request.cartProductIdsKey) return;
         let isCurrent = true;
 
         async function loadProducts() {
-            setIsLoading(true);
-
             const { data } = await createClient()
                 .from("products")
                 .select(`
@@ -83,29 +89,25 @@ export default function StorefrontCartPage({
             is_primary
           )
         `)
-                .eq("store_id", storeId)
+                .eq("store_id", request.storeId)
                 .eq("is_active", true)
-                .in(
-                "id",
-                cartProductIdsKey.split("|").filter(Boolean),
-                );
+                .in("id", request.cartProductIdsKey.split("|").filter(Boolean));
 
             if (isCurrent) {
-                setProducts(
-                    (data ?? []).map((product) =>
+                setLoadedProducts({
+                    request,
+                    products: (data ?? []).map((product) =>
                         toStorefrontProduct(product as DatabaseStorefrontProduct),
                     ),
-                );
-                setIsLoading(false);
+                });
             }
         }
 
         void loadProducts();
-
         return () => {
-            isCurrent = false;
-        };
-    }, [cartProductIdsKey, isReady, storeId]);
+        isCurrent = false;
+    };
+    }, [request]);
 
     const viewItems = toStorefrontCartView(cartItems, products);
 

@@ -49,7 +49,7 @@ export default function OrderSuccessPage(){
                             "
                         >
                             Your items are being prepared for shipment.
-                            We've sent a confirmation email to your registered address.
+                            We&apos;ve sent a confirmation email to your registered address.
                         </p>
                     </div>
                     <OrderDetails />

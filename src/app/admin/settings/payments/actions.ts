@@ -9,7 +9,9 @@ import { prepareNewStorePaymentMethod } from "@/lib/payments/newStorePaymentMeth
 import {
   buildPaymentQrImagePath,
   hasPaymentQrImageSignature,
+  isPaymentQrImagePathOwnedBy,
   preparePaymentQrUpload,
+  type PaymentQrImageScope,
 } from "@/lib/payments/paymentQrCode";
 import { getPaymentQrImageChange } from "@/lib/payments/paymentQrChange";
 import { prepareStorePaymentMethodUpdate } from "@/lib/payments/storePaymentMethodUpdate";
@@ -65,12 +67,15 @@ async function queuePaymentQrCleanup(
   serviceClient: ReturnType<typeof createServiceClient>,
   storagePath: string,
   cleanupError: string,
+  scope: PaymentQrImageScope,
 ) {
   const { error } = await serviceClient
     .from("payment_qr_cleanup_jobs")
     .upsert(
       {
         storage_path: storagePath,
+        store_id: scope.storeId,
+        payment_method_id: scope.paymentMethodId,
         last_error: cleanupError,
       },
       {
@@ -86,7 +91,14 @@ async function queuePaymentQrCleanup(
 async function removePaymentQrImage(
   serviceClient: ReturnType<typeof createServiceClient>,
   storagePath: string,
+  scope: PaymentQrImageScope,
 ) {
+  // qr_image_path is writable through the store owner's database policy.
+  // A stored value is not authority to delete an object using service access.
+  if (!isPaymentQrImagePathOwnedBy(storagePath, scope)) {
+    return;
+  }
+
   const { error } = await serviceClient.storage
     .from("payment-qr-codes")
     .remove([storagePath]);
@@ -96,6 +108,7 @@ async function removePaymentQrImage(
       serviceClient,
       storagePath,
       error.message,
+      scope,
     );
   }
 }
@@ -251,6 +264,7 @@ export async function updateStorePaymentMethod(
       await removePaymentQrImage(
         serviceClient,
         replacementQrImagePath,
+        { storeId, paymentMethodId: currentPaymentMethod.id },
       );
     }
 
@@ -266,6 +280,7 @@ export async function updateStorePaymentMethod(
     await removePaymentQrImage(
       cleanupClient,
       qrImageChange.obsoleteQrImagePath,
+      { storeId, paymentMethodId: currentPaymentMethod.id },
     );
   }
 

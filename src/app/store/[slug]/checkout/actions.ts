@@ -14,91 +14,64 @@ type CheckoutSuccess = {
     tracking_token: string;
     payment_method_label: string;
     payment_instructions: string;
+    replayed: boolean;
 };
 
 export type SubmitGuestCheckoutResult =
     | { status: "success"; order: CheckoutSuccess }
-    | { status: "error"; message: string };
+    | { status: "error"; message: string; retryable: boolean };
 
-async function createNewOrderNotifications({
-    order,
-    customerName,
-}: {
-    order: CheckoutSuccess;
-    customerName: string;
-}) {
-    const supabase = createServiceClient();
-
-    const { error } = await supabase.rpc(
-        "create_new_order_notifications",
-        {
-            p_order_id: order.order_id,
-            p_customer_name: customerName,
-        },
-    );
-
-    if (error) {
-        throw new Error(error.message);
-    }
-}
+const uncertainResult: SubmitGuestCheckoutResult = {
+    status: "error", retryable: true,
+    message: "Your checkout result could not be confirmed. Use Recover checkout to safely check the same order.",
+};
 
 export async function submitGuestCheckout(
     input: GuestCheckoutRequest,
+    attemptKey: string,
 ): Promise<SubmitGuestCheckoutResult> {
+    let request: GuestCheckoutRequest;
     try {
-        const request = prepareGuestCheckoutRequest(input);
-
+        if (!/^[a-f0-9]{64}$/.test(attemptKey)) throw new Error("A saved checkout attempt is required. Refresh and try again.");
+        request = prepareGuestCheckoutRequest(input);
+    } catch {
+        // Local validation cannot establish whether an earlier valid request
+        // with this key committed. Never discard its recovery capability.
+        return uncertainResult;
+    }
+    try {
         const authSupabase = await createClient();
         const {
             data: { user },
+            error: authError,
         } = await authSupabase.auth.getUser();
+        if (authError && authError.name !== "AuthSessionMissingError") return uncertainResult;
 
         const supabase = createServiceClient();
 
         const { data, error } = await supabase.rpc(
-            "create_guest_checkout_order",
-            buildCheckoutOrderRpcParams(request, user?.id),
+            "create_checkout_order_idempotent",
+            { ...buildCheckoutOrderRpcParams(request, user?.id), p_attempt_key: attemptKey },
         );
 
         if (error) {
-            return {
-                status: "error",
-                message: error.message,
-            };
+            // Only our explicit pre-order validation code proves no order was
+            // committed. Transport, auth changes and conflicts retain the key.
+            if (error.code === "P0002") return { status: "error", retryable: false, message: "The order was not placed. Check stock, payment method and required details, then try again." };
+            return uncertainResult;
         }
 
         const order = (data as CheckoutSuccess[] | null)?.[0];
 
         if (!order) {
-            return {
-                status: "error",
-                message: "Could not create your order.",
-            };
-        }
-
-        try {
-            await createNewOrderNotifications({
-                order,
-                customerName: request.customerName,
-            });
-        } catch (notificationError) {
-            console.error(
-                "Could not create new-order notifications.",
-                notificationError,
-            );
+            return uncertainResult;
         }
 
         return {
             status: "success",
             order,
         };
-    } catch (error) {
-        return {
-            status: "error",
-            message:
-                error instanceof Error
-                    ? error.message
-                    : "Could not place your order.",
-        };
+    } catch {
+        return uncertainResult;
     }
 }

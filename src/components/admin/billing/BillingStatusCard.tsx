@@ -1,13 +1,12 @@
 import {
   Check,
   Clock3,
-  CreditCard,
   LockKeyhole,
-  ReceiptText,
   Sparkles,
 } from "lucide-react";
 import type { MerchantPlanCode } from "@/lib/merchants/merchantBilling";
 import ManualTngPaymentForm from "./ManualTngPaymentForm";
+import SubscriptionRequestHistory, { type SubscriptionPaymentRequest } from "./SubscriptionRequestHistory";
 
 type BillingStatusCardProps = {
   billing: {
@@ -25,11 +24,7 @@ type BillingStatusCardProps = {
       recipientName: string;
       recipientNumber: string;
     } | null;
-    paymentRequests: Array<{
-      id: string;
-      status: "pending" | "approved" | "rejected";
-      review_note: string | null;
-    }>;
+    paymentRequests: SubscriptionPaymentRequest[];
   };
 };
 
@@ -281,31 +276,7 @@ export default function BillingStatusCard({
         )}
       </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between px-1">
-          <h3 className="font-display text-xl text-on-surface">
-            Billing History
-          </h3>
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
-            0 invoices
-          </span>
-        </div>
-
-        <div className="rounded-2xl bg-surface-container p-6 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-primary">
-            <ReceiptText size={27} />
-          </div>
-
-          <h4 className="mt-3 text-sm font-semibold text-on-surface">
-            No billing history yet
-          </h4>
-
-          <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-on-surface-variant">
-            Invoices and receipts will appear here after a subscription becomes
-            active.
-          </p>
-        </div>
-      </section>
+      <SubscriptionRequestHistory requests={billing.paymentRequests} />
     </div>
   );
 }

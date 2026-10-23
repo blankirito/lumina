@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+.vs/
 
 # debug
 npm-debug.log*
@@ -42,3 +43,7 @@ supabase/seed.local.sql
 next-env.d.ts
 
 /src/generated/prisma
+
+# Local recovery data and CLI metadata must never be published.
+/recovery-private/
+/supabase/.temp/

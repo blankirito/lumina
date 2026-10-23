@@ -3,10 +3,10 @@
 import {
   createContext,
   useContext,
-  useEffect,
+  useCallback,
   useMemo,
-  useState,
 } from "react";
+import { useLocalStorageState } from "@/components/state/useLocalStorageState";
 
 type WishlistContextValue = {
   productIds: number[];
@@ -22,49 +22,32 @@ const WishlistContext = createContext<WishlistContextValue | undefined>(
 
 const STORAGE_KEY = "lumina-wishlist";
 
+const EMPTY_ITEMS: number[] = [];
+
 export function WishlistProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [productIds, setProductIds] = useState<number[]>([]);
-  const [isReady, setIsReady] = useState(false);
+  const { value: productIds, setValue: setProductIds, isReady } = useLocalStorageState(
+    STORAGE_KEY, EMPTY_ITEMS, true,
+  );
 
-  useEffect(() => {
-    const savedWishlist = window.localStorage.getItem(STORAGE_KEY);
-
-    if (savedWishlist) {
-      try {
-        setProductIds(JSON.parse(savedWishlist));
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-
-    setIsReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (isReady) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(productIds));
-    }
-  }, [isReady, productIds]);
-
-  function hasItem(productId: number) {
+  const hasItem = useCallback((productId: number) => {
     return productIds.includes(productId);
-  }
+  }, [productIds]);
 
-  function toggleItem(productId: number) {
+  const toggleItem = useCallback((productId: number) => {
     setProductIds((current) =>
       current.includes(productId)
         ? current.filter((id) => id !== productId)
         : [...current, productId],
     );
-  }
+  }, [setProductIds]);
 
-  function removeItem(productId: number) {
+  const removeItem = useCallback((productId: number) => {
     setProductIds((current) => current.filter((id) => id !== productId));
-  }
+  }, [setProductIds]);
 
   const value = useMemo(
     () => ({
@@ -74,7 +57,7 @@ export function WishlistProvider({
       toggleItem,
       removeItem,
     }),
-    [productIds, isReady],
+    [productIds, isReady, hasItem, toggleItem, removeItem],
   );
 
   return (

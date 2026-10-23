@@ -59,6 +59,7 @@ function customer(
     phone: null,
     location: "Kuala Lumpur, Malaysia",
     orderCount: 1,
+    paidOrderCount: 1,
     totalSpent,
     isGuest: false,
     firstOrderAt,

@@ -36,4 +36,14 @@ describe("Google auth callback safety", () => {
         expect(getSafeLoginNotice("unexpected-error")).toBe("");
         expect(getSafeLoginNotice(null)).toBe("");
     });
+
+    it.each(["/\t/attacker.example", "/\n/attacker.example", "/\r/attacker.example"])(
+        "keeps a control-character continuation on the application origin: %j",
+        (input) => {
+            const destination = getSafeAuthCallbackNext(input);
+            expect(new URL(destination, "https://lumina.example").origin).toBe(
+                "https://lumina.example",
+            );
+        },
+    );
 });

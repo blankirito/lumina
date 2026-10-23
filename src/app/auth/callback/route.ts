@@ -5,17 +5,24 @@ import {
 import { getSignInDestination } from "@/lib/auth/getSignInDestination";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { hasRecentRecovery } from "@/lib/auth/emailAuth";
+
+function authRedirect(request: Request, path: string) {
+    const response = NextResponse.redirect(new URL(path, request.url));
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+}
 
 function getLoginFailureRedirect(request: Request) {
-    return NextResponse.redirect(
-        new URL("/login?notice=google-sign-in-failed", request.url),
-    );
+    return authRedirect(request, "/login?notice=auth-link-invalid");
 }
 
 export async function GET(request: Request) {
+    try {
     const requestUrl = new URL(request.url);
     const code = requestUrl.searchParams.get("code");
-    const storeSlug = getSafeAuthCallbackStoreSlug(
+    let storeSlug = getSafeAuthCallbackStoreSlug(
         requestUrl.searchParams.get("store"),
     );
     const safeNext = getSafeAuthCallbackNext(
@@ -32,6 +39,17 @@ export async function GET(request: Request) {
     if (error || !data.user) {
         return getLoginFailureRedirect(request);
     }
+
+    // Only signed Auth claims select recovery, never a URL or cookie hint.
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+    if (claimsError || !claimsData?.claims) return getLoginFailureRedirect(request);
+    if (hasRecentRecovery(claimsData.claims, data.user.id)) {
+        return authRedirect(request, "/reset-password");
+    }
+
+    // This editable metadata is only a validated navigation preference.
+    const signupStore = data.user.user_metadata.signup_store;
+    storeSlug ??= getSafeAuthCallbackStoreSlug(typeof signupStore === "string" ? signupStore : null);
 
     const [{ data: profile, error: profileError }, { data: storeMembership }] =
         await Promise.all([
@@ -71,5 +89,9 @@ export async function GET(request: Request) {
             ? safeNext
             : roleDestination;
 
-    return NextResponse.redirect(new URL(destination, request.url));
+    return authRedirect(request, destination);
+    } catch {
+        // Never include request URLs, provider errors or session payloads in logs.
+        return getLoginFailureRedirect(request);
+    }
 }

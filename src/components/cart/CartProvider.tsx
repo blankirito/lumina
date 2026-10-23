@@ -3,10 +3,9 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useMemo,
-  useState,
 } from "react";
+import { useLocalStorageState } from "@/components/state/useLocalStorageState";
 
 export type CartLine = {
   productId: number;
@@ -29,33 +28,16 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 const CART_STORAGE_KEY = "lumina-cart";
 
+const EMPTY_ITEMS: CartLine[] = [];
+
 export function CartProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [items, setItems] = useState<CartLine[]>([]);
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    try {
-      const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
-
-      if (savedCart) {
-        setItems(JSON.parse(savedCart) as CartLine[]);
-      }
-    } catch {
-      window.localStorage.removeItem(CART_STORAGE_KEY);
-    } finally {
-      setIsReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isReady) return;
-
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-  }, [isReady, items]);
+  const { value: items, setValue: setItems, isReady } = useLocalStorageState(
+    CART_STORAGE_KEY, EMPTY_ITEMS, true,
+  );
 
   function addItem(productId: number, quantity: number) {
     setItems((currentItems) => {

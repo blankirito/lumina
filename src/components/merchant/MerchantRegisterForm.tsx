@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { getSignUpDestination } from "@/lib/auth/getSignUpDestination";
 import { createClient } from "@/lib/supabase/client";
+import { getEmailAuthRedirect } from "@/lib/auth/emailAuth";
 
 export default function MerchantRegisterForm() {
   const [fullName, setFullName] = useState("");
@@ -54,7 +55,7 @@ export default function MerchantRegisterForm() {
           phone,
           merchant_intent: true,
         },
-        emailRedirectTo: window.location.origin + destination,
+        emailRedirectTo: getEmailAuthRedirect(window.location.origin),
       },
     });
 
@@ -67,7 +68,7 @@ export default function MerchantRegisterForm() {
 
     if (!data.session) {
       setMessage(
-        "Check your email to confirm your merchant account, then continue setting up your store.",
+        "Check your email to confirm your merchant account. Open the link in this browser to continue setting up your store.",
       );
       return;
     }

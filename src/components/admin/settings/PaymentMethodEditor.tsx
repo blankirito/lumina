@@ -34,10 +34,6 @@ type PaymentMethodEditorProps = {
   paymentMethods: StorePaymentMethod[];
 };
 
-function getPaymentMethodIcon(code: string) {
-  return code === "bank_transfer" ? Building2 : Banknote;
-}
-
 function AddPaymentMethodForm({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [label, setLabel] = useState("");
@@ -166,8 +162,6 @@ function PaymentMethodCard({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const Icon = getPaymentMethodIcon(paymentMethod.code);
-
   const existingQrImageUrl = useMemo(() => {
     if (
       !paymentMethod.qrImagePath ||
@@ -187,18 +181,10 @@ function PaymentMethodCard({
   );
 
   useEffect(() => {
-    if (!qrImage) {
-      setNewQrPreviewUrl(null);
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(qrImage);
-    setNewQrPreviewUrl(objectUrl);
-
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      if (newQrPreviewUrl) URL.revokeObjectURL(newQrPreviewUrl);
     };
-  }, [qrImage]);
+  }, [newQrPreviewUrl]);
 
   const qrPreviewUrl = removeQr
     ? null
@@ -207,11 +193,13 @@ function PaymentMethodCard({
   function handleQrImageChange(event: FormEvent<HTMLInputElement>) {
     const selectedImage = event.currentTarget.files?.[0] ?? null;
 
+    setNewQrPreviewUrl(selectedImage ? URL.createObjectURL(selectedImage) : null);
     setQrImage(selectedImage);
     setRemoveQr(false);
   }
 
   function handleRemoveQr() {
+    setNewQrPreviewUrl(null);
     setQrImage(null);
     setRemoveQr(true);
     setQrInputKey((currentKey) => currentKey + 1);
@@ -241,6 +229,7 @@ function PaymentMethodCard({
         return;
       }
 
+      setNewQrPreviewUrl(null);
       setQrImage(null);
       setRemoveQr(false);
       setQrInputKey((currentKey) => currentKey + 1);
@@ -259,7 +248,11 @@ function PaymentMethodCard({
         className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-surface-container-low"
       >
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-container/30 text-primary">
-          <Icon size={21} />
+          {paymentMethod.code === "bank_transfer" ? (
+            <Building2 size={21} />
+          ) : (
+            <Banknote size={21} />
+          )}
         </div>
 
         <div className="min-w-0 flex-1">

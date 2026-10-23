@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Navbar2 from "@/components/shared/Navbar2";
+import { useLocalStorageState } from "@/components/state/useLocalStorageState";
 import SearchBar from "@/components/search/SearchBar";
 import RecentSearch from "@/components/search/RecentSearch";
 import PopularCategory from "@/components/search/PopularCategory";
@@ -10,21 +11,12 @@ import { products } from "@/data/products";
 
 const STORAGE_KEY = "lumina-recent-searches";
 
+const EMPTY_SEARCHES: string[] = [];
+
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-
-  useEffect(() => {
-    const savedSearches = window.localStorage.getItem(STORAGE_KEY);
-
-    if (savedSearches) {
-      try {
-        setRecentSearches(JSON.parse(savedSearches));
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-  }, []);
+  const { value: recentSearches, setValue: setRecentSearches, clear: clearSearches } =
+    useLocalStorageState(STORAGE_KEY, EMPTY_SEARCHES);
 
   function saveSearch(value: string) {
     const trimmedValue = value.trim();
@@ -40,8 +32,6 @@ export default function SearchPage() {
           (item) => item.toLowerCase() !== trimmedValue.toLowerCase(),
         ),
       ].slice(0, 5);
-
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSearches));
 
       return nextSearches;
     });
@@ -85,10 +75,7 @@ export default function SearchPage() {
           <RecentSearch
             searches={recentSearches}
             onSelect={setSearchQuery}
-            onClear={() => {
-              setRecentSearches([]);
-              window.localStorage.removeItem(STORAGE_KEY);
-            }}
+            onClear={clearSearches}
           />
 
           <PopularCategory onSelect={setSearchQuery} />
